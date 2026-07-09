@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <meta name="format-detection" content="telephone=no">
+  <title>推箱子游戏</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #151515;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+    }
+
+    .screen {
+      display: none;
+      width: 100%;
+      height: 100%;
+      place-items: center;
+    }
+
+    .screen.active {
+      display: grid;
+    }
+
+    .stage {
+      position: relative;
+      width: min(100vw, calc(100vh * 16 / 9));
+      aspect-ratio: 16 / 9;
+      overflow: hidden;
+      background: #ffd91c center / cover no-repeat;
+    }
+
+    .stage-image {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      pointer-events: none;
+      -webkit-user-drag: none;
+    }
+
+    .start-hit {
+      position: absolute;
+      left: 50%;
+      top: 23%;
+      width: 34%;
+      height: 20%;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      cursor: pointer;
+      transform: translate(-50%, -50%);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .entity {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      -webkit-user-drag: none;
+      transition: left 110ms ease, top 110ms ease;
+    }
+
+    .target {
+      z-index: 2;
+    }
+
+    .box {
+      z-index: 4;
+    }
+
+    .player {
+      z-index: 5;
+    }
+
+    .controls {
+      position: absolute;
+      right: 3%;
+      bottom: 3%;
+      z-index: 10;
+      width: 18.90625%;
+      aspect-ratio: 363 / 240;
+    }
+
+    .controls img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      -webkit-user-drag: none;
+    }
+
+    .control-hit {
+      position: absolute;
+      width: 31%;
+      height: 42%;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .control-hit.up {
+      left: 34.5%;
+      top: 0;
+    }
+
+    .control-hit.left {
+      left: 0;
+      top: 49%;
+    }
+
+    .control-hit.down {
+      left: 34.5%;
+      top: 49%;
+    }
+
+    .control-hit.right {
+      right: 0;
+      top: 49%;
+    }
+
+    .win-screen {
+      background:
+        radial-gradient(circle at 50% 32%, rgba(255, 255, 255, 0.38), transparent 24%),
+        #ffd91c;
+      color: #c5232a;
+      text-align: center;
+    }
+
+    .win-content {
+      display: grid;
+      justify-items: center;
+      gap: 28px;
+      padding: 32px;
+    }
+
+    .win-content h1 {
+      margin: 0;
+      color: #c5232a;
+      font-size: clamp(34px, 8vw, 82px);
+      line-height: 1.1;
+      letter-spacing: 0;
+      text-shadow:
+        0 5px 0 #fff,
+        0 0 18px rgba(255, 255, 255, 0.75);
+    }
+
+    .exit-button {
+      min-width: 150px;
+      min-height: 56px;
+      border: 0;
+      border-radius: 8px;
+      background: #fff;
+      color: #c5232a;
+      box-shadow: 0 10px 26px rgba(156, 82, 0, 0.22);
+      font: inherit;
+      font-size: 24px;
+      font-weight: 800;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .exit-button:active {
+      transform: scale(0.98);
+    }
+
+    .closed-tip {
+      display: none;
+      margin: 0;
+      color: #8d1e23;
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    body.closed .closed-tip {
+      display: block;
+    }
+
+    .rotate-mask {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      place-items: center;
+      padding: 28px;
+      background: #ffd91c;
+      color: #c5232a;
+      text-align: center;
+      font-size: 26px;
+      font-weight: 800;
+      line-height: 1.4;
+    }
+
+    @media (orientation: portrait) and (max-width: 900px) {
+      .rotate-mask {
+        display: grid;
+      }
+    }
+
+    @media (max-width: 900px) and (orientation: landscape) {
+      .controls {
+        width: 23.5%;
+        right: 1.5%;
+        bottom: 1.5%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <section id="startScreen" class="screen active">
+    <div class="stage">
+      <img class="stage-image" src="用图/游戏开始页面.jpg" alt="">
+      <button id="startButton" class="start-hit" type="button" aria-label="开始游戏"></button>
+    </div>
+  </section>
+
+  <section id="gameScreen" class="screen">
+    <div id="gameStage" class="stage">
+      <img class="stage-image" src="用图/游戏地图.jpg" alt="">
+      <div id="targetLayer"></div>
+      <div id="boxLayer"></div>
+      <img id="player" class="entity player" src="用图/小人.png" alt="">
+      <div class="controls" aria-label="方向按钮">
+        <img src="用图/游戏按键.png" alt="">
+        <button class="control-hit up" type="button" data-dir="up" aria-label="上"></button>
+        <button class="control-hit left" type="button" data-dir="left" aria-label="左"></button>
+        <button class="control-hit down" type="button" data-dir="down" aria-label="下"></button>
+        <button class="control-hit right" type="button" data-dir="right" aria-label="右"></button>
+      </div>
+    </div>
+  </section>
+
+  <section id="winScreen" class="screen win-screen">
+    <div class="win-content">
+      <h1>恭喜你游戏胜利</h1>
+      <button id="exitButton" class="exit-button" type="button">退出</button>
+      <p class="closed-tip">可以关闭这个页面啦</p>
+    </div>
+  </section>
+
+  <div class="rotate-mask">请横屏游玩</div>
+
+  <script>
+    const stageWidth = 1920;
+    const stageHeight = 1080;
+    const cellX = [288, 359.5, 430, 502.5, 571.5, 639, 711.5, 785.5, 854, 921, 993.5, 1067.5, 1136, 1204.5, 1277, 1347.5, 1417.5, 1488, 1559, 1631.5];
+    const cellY = [155.25, 227.25, 296.25, 366.75, 439, 510, 580.5, 650.5, 722];
+    const playableRows = [
+      ".........11111111111",
+      ".........11111111111",
+      ".............1111111",
+      "1111.111.111.1111111",
+      "1111.111.111.1111111",
+      "1111.111.111.1111111",
+      "1111..11..11.1111111",
+      "11111111111111111111",
+      "11111111111111111111"
+    ];
+
+    const targets = [
+      { x: 15, y: 0 },
+      { x: 16, y: 0 },
+      { x: 17, y: 2 },
+      { x: 17, y: 7 }
+    ];
+
+    const initialBoxes = [
+      { x: 1, y: 4 },
+      { x: 1, y: 5 },
+      { x: 6, y: 4 },
+      { x: 10, y: 4 }
+    ];
+
+    const directions = {
+      up: { x: 0, y: -1 },
+      down: { x: 0, y: 1 },
+      left: { x: -1, y: 0 },
+      right: { x: 1, y: 0 }
+    };
+
+    const screens = {
+      start: document.getElementById("startScreen"),
+      game: document.getElementById("gameScreen"),
+      win: document.getElementById("winScreen")
+    };
+    const targetLayer = document.getElementById("targetLayer");
+    const boxLayer = document.getElementById("boxLayer");
+    const playerElement = document.getElementById("player");
+    const startButton = document.getElementById("startButton");
+    const exitButton = document.getElementById("exitButton");
+
+    let player = { x: 19, y: 6 };
+    let boxes = [];
+    let won = false;
+
+    function key(pos) {
+      return `${pos.x},${pos.y}`;
+    }
+
+    const playable = new Set();
+    playableRows.forEach((row, y) => {
+      [...row].forEach((value, x) => {
+        if (value === "1") playable.add(key({ x, y }));
+      });
+    });
+
+    const targetSet = new Set(targets.map(key));
+
+    function setEntityPosition(element, pos, width, height) {
+      element.style.left = `${(cellX[pos.x] / stageWidth) * 100}%`;
+      element.style.top = `${(cellY[pos.y] / stageHeight) * 100}%`;
+      element.style.width = `${(width / stageWidth) * 100}%`;
+      element.style.height = `${(height / stageHeight) * 100}%`;
+    }
+
+    function showScreen(name) {
+      Object.values(screens).forEach(screen => screen.classList.remove("active"));
+      screens[name].classList.add("active");
+    }
+
+    function resetGame() {
+      won = false;
+      player = { x: 19, y: 6 };
+      boxes = initialBoxes.map(box => ({ ...box }));
+      render();
+    }
+
+    function renderTargets() {
+      targetLayer.innerHTML = "";
+      targets.forEach(target => {
+        const img = document.createElement("img");
+        img.className = "entity target";
+        img.src = "用图/点位.png";
+        img.alt = "";
+        setEntityPosition(img, target, 46, 47);
+        targetLayer.appendChild(img);
+      });
+    }
+
+    function renderBoxes() {
+      boxLayer.innerHTML = "";
+      boxes.forEach((box, index) => {
+        const img = document.createElement("img");
+        img.className = "entity box";
+        img.src = "用图/箱子.png";
+        img.alt = "";
+        img.dataset.box = String(index);
+        setEntityPosition(img, box, 60, 60);
+        boxLayer.appendChild(img);
+      });
+    }
+
+    function render() {
+      renderTargets();
+      renderBoxes();
+      setEntityPosition(playerElement, player, 44, 56);
+    }
+
+    function boxIndexAt(pos) {
+      return boxes.findIndex(box => box.x === pos.x && box.y === pos.y);
+    }
+
+    function canStand(pos) {
+      return playable.has(key(pos));
+    }
+
+    function move(directionName) {
+      if (won) return;
+      const direction = directions[directionName];
+      if (!direction) return;
+
+      const next = {
+        x: player.x + direction.x,
+        y: player.y + direction.y
+      };
+
+      if (!canStand(next)) return;
+
+      const boxIndex = boxIndexAt(next);
+      if (boxIndex >= 0) {
+        const pushed = {
+          x: next.x + direction.x,
+          y: next.y + direction.y
+        };
+
+        if (!canStand(pushed)) return;
+        if (boxIndexAt(pushed) >= 0) return;
+
+        boxes[boxIndex] = pushed;
+      }
+
+      player = next;
+      render();
+      checkWin();
+    }
+
+    function checkWin() {
+      if (boxes.length === targets.length && boxes.every(box => targetSet.has(key(box)))) {
+        won = true;
+        setTimeout(() => showScreen("win"), 150);
+      }
+    }
+
+    function startGame() {
+      resetGame();
+      showScreen("game");
+    }
+
+    function exitPage() {
+      if (typeof WeixinJSBridge !== "undefined") {
+        WeixinJSBridge.call("closeWindow");
+      }
+
+      window.close();
+
+      setTimeout(() => {
+        if (history.length > 1) history.back();
+      }, 120);
+
+      setTimeout(() => {
+        document.body.classList.add("closed");
+      }, 360);
+    }
+
+    startButton.addEventListener("click", startGame);
+    exitButton.addEventListener("click", exitPage);
+
+    document.querySelectorAll(".control-hit").forEach(button => {
+      button.addEventListener("pointerdown", event => {
+        event.preventDefault();
+        move(button.dataset.dir);
+      });
+    });
+
+    document.addEventListener("keydown", event => {
+      const keyMap = {
+        ArrowUp: "up",
+        ArrowDown: "down",
+        ArrowLeft: "left",
+        ArrowRight: "right"
+      };
+      if (keyMap[event.key] && screens.game.classList.contains("active")) {
+        event.preventDefault();
+        move(keyMap[event.key]);
+      }
+    });
+
+    render();
+  </script>
+</body>
+</html>
